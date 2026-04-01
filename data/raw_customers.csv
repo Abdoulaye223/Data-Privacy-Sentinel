@@ -1,0 +1,5 @@
+order_id,customer_name,email,ip_address,total_spent,purchase_date
+1001,Moussa Traoré,moussa.t@gmail.com,192.168.1.45,150.50,2026-03-15
+1002,Fatoumata Keita,fatou88@yahoo.fr,102.16.4.110,89.99,2026-03-15
+1003,John Doe,j.doe@outlook.com,172.16.0.5,210.00,2026-03-16
+1004,Awa Diallo,a.diallo@orange.ml,41.221.178.50,45.00,2026-03-16
