@@ -98,3 +98,30 @@ def test_protect_data_rejects_same_input_and_output_path(tmp_path):
 
     with pytest.raises(ValueError, match="must be different"):
         protect_data(str(input_path), str(input_path), secret="test-secret")
+
+def test_dashboard_rejects_raw_identifier_columns(tmp_path):
+    from src.dashboard import generate_secure_report
+
+    input_path = tmp_path / "unsafe.csv"
+    sample_df().drop(columns=["ip_address"]).to_csv(input_path, index=False)
+    with pytest.raises(ValueError, match="schema rejected"):
+        generate_secure_report(str(input_path), str(tmp_path / "report.png"))
+
+
+def test_dashboard_generates_report_from_expected_export(tmp_path):
+    from src.dashboard import generate_secure_report
+
+    clean = sample_df().drop(columns=["email", "ip_address"]).copy()
+    clean["email_hash"] = [
+        pseudonymize_email("AWA@example.com", "test-secret"),
+        pd.NA,
+    ]
+    input_path = tmp_path / "clean.csv"
+    output_path = tmp_path / "report.png"
+    clean.to_csv(input_path, index=False)
+
+    result = generate_secure_report(str(input_path), str(output_path))
+    assert result == output_path.resolve()
+    assert output_path.is_file()
+    assert output_path.stat().st_size > 0
+
