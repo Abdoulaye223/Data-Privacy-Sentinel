@@ -124,4 +124,3 @@ def test_dashboard_generates_report_from_expected_export(tmp_path):
     assert result == output_path.resolve()
     assert output_path.is_file()
     assert output_path.stat().st_size > 0
-
