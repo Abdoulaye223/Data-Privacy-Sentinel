@@ -108,6 +108,22 @@ def test_dashboard_rejects_raw_identifier_columns(tmp_path):
         generate_secure_report(str(input_path), str(tmp_path / "report.png"))
 
 
+def test_dashboard_rejects_infinite_amount(tmp_path):
+    from src.dashboard import generate_secure_report
+
+    clean = sample_df().drop(columns=["email", "ip_address"]).copy()
+    clean["total_spent"] = ["inf", 0]
+    clean["email_hash"] = [
+        pseudonymize_email("AWA@example.com", "test-secret"),
+        pd.NA,
+    ]
+    input_path = tmp_path / "clean.csv"
+    clean.to_csv(input_path, index=False)
+
+    with pytest.raises(ValueError, match="non-finite"):
+        generate_secure_report(str(input_path), str(tmp_path / "report.png"))
+
+
 def test_dashboard_generates_report_from_expected_export(tmp_path):
     from src.dashboard import generate_secure_report
 

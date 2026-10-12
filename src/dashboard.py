@@ -1,4 +1,5 @@
 """Create a revenue chart only from the expected sanitized export."""
+import math
 from pathlib import Path
 
 import matplotlib
@@ -41,6 +42,8 @@ def generate_secure_report(data_file="clean_data_export.csv", output_image="secu
     amounts = pd.to_numeric(df["total_spent"], errors="raise")
     if amounts.isna().any():
         raise ValueError("total_spent contains missing values.")
+    if not amounts.map(math.isfinite).all():
+        raise ValueError("total_spent contains non-finite values.")
 
     dates = pd.to_datetime(df["purchase_date"], errors="raise")
     if dates.isna().any():
