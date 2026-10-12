@@ -1,67 +1,98 @@
-import pandas as pd
+"""Create a revenue chart only from the expected sanitized export."""
+import math
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import pandas as pd
 import seaborn as sns
-import sys
-import os
 
-def generate_secure_report(data_file):
-    print(f"📊 Génération du rapport à partir de : {data_file}")
-    
-    # Vérification de sécurité : Le fichier existe-t-il ?
-    if not os.path.exists(data_file):
-        print(f"❌ ERREUR : Le fichier sécurisé {data_file} est introuvable.")
-        print("Veuillez d'abord exécuter gateway.py pour générer les données anonymisées.")
-        sys.exit(1)
+EXPECTED_EXPORT_COLUMNS = {
+    "order_id",
+    "customer_name",
+    "total_spent",
+    "purchase_date",
+    "email_hash",
+}
 
-    # Chargement des données NETTOYÉES
-    df = pd.read_csv(data_file)
 
-    # Vérification de sécurité (Double Check) : Y a-t-il des données en clair par erreur ?
-    if 'email' in df.columns or 'ip_address' in df.columns:
-         print("🛑 ALERTE CRITIQUE : Des données non cryptées (PII) ont été détectées dans le fichier source.")
-         print("Génération du rapport annulée par sécurité.")
-         sys.exit(1)
+def generate_secure_report(data_file="clean_data_export.csv", output_image="secure_revenue_report.png"):
+    """Validate the sanitized export and save a daily revenue chart."""
+    input_path = Path(data_file).expanduser().resolve()
+    if not input_path.is_file():
+        raise FileNotFoundError(
+            f"Sanitized export not found: {input_path}. Run gateway.py first."
+        )
 
-    # --- ANALYSE BUSINESS ---
-    # On groupe les ventes par date pour voir le chiffre d'affaires quotidien
-    daily_revenue = df.groupby('purchase_date')['total_spent'].sum().reset_index()
+    df = pd.read_csv(input_path)
 
-    # --- VISUALISATION (Style Professionnel) ---
-    # Configuration du style graphique
-    sns.set_theme(style="whitegrid")
-    plt.figure(figsize=(10, 6))
+    if df.columns.duplicated().any():
+        raise ValueError("Sanitized export contains duplicate column names.")
 
-    # Création du graphique en barres
-    ax = sns.barplot(
-        x='purchase_date', 
-        y='total_spent', 
-        data=daily_revenue, 
-        palette="viridis"
+    actual_columns = set(df.columns)
+    if actual_columns != EXPECTED_EXPORT_COLUMNS:
+        missing = sorted(EXPECTED_EXPORT_COLUMNS - actual_columns)
+        unexpected = sorted(actual_columns - EXPECTED_EXPORT_COLUMNS)
+        raise ValueError(
+            "Sanitized export schema rejected. "
+            f"Missing columns: {missing}; unexpected columns: {unexpected}."
+        )
+
+    amounts = pd.to_numeric(df["total_spent"], errors="raise")
+    if amounts.isna().any():
+        raise ValueError("total_spent contains missing values.")
+    if not amounts.map(math.isfinite).all():
+        raise ValueError("total_spent contains non-finite values.")
+
+    dates = pd.to_datetime(df["purchase_date"], errors="raise")
+    if dates.isna().any():
+        raise ValueError("purchase_date contains missing values.")
+
+    if df.empty:
+        raise ValueError("Sanitized export contains no rows.")
+
+    report_df = pd.DataFrame({
+        "purchase_date": dates.dt.strftime("%Y-%m-%d"),
+        "total_spent": amounts,
+    })
+    daily_revenue = (
+        report_df.groupby("purchase_date", as_index=False)["total_spent"]
+        .sum()
+        .sort_values("purchase_date")
     )
 
-    # Ajout des titres et labels professionnels
-    plt.title("Chiffre d'Affaires Quotidien (Données Anonymisées)", fontsize=16, pad=20)
-    plt.xlabel('Date de Transaction', fontsize=12)
-    plt.ylabel('Revenus Générés ($)', fontsize=12)
+    sns.set_theme(style="whitegrid")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.barplot(
+        x="purchase_date",
+        y="total_spent",
+        data=daily_revenue,
+        ax=ax,
+        color="steelblue",
+    )
+    ax.set_title("Daily Revenue (Sanitized Data)", fontsize=16, pad=20)
+    ax.set_xlabel("Transaction Date", fontsize=12)
+    ax.set_ylabel("Revenue (source currency)", fontsize=12)
 
-    # Ajout des montants exacts au-dessus des barres
-    for p in ax.patches:
-        ax.annotate(f"${p.get_height():.2f}", 
-                    (p.get_x() + p.get_width() / 2., p.get_height()), 
-                    ha='center', va='center', 
-                    xytext=(0, 9), 
-                    textcoords='offset points')
+    for patch in ax.patches:
+        ax.annotate(
+            f"{patch.get_height():.2f}",
+            (patch.get_x() + patch.get_width() / 2, patch.get_height()),
+            ha="center",
+            va="center",
+            xytext=(0, 9),
+            textcoords="offset points",
+        )
 
-    # Ajustement de la mise en page
-    plt.tight_layout()
+    fig.tight_layout()
+    output_path = Path(output_image).expanduser().resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
+    print(f"Revenue report saved to: {output_path}")
+    return output_path
 
-    # Sauvegarde du graphique en image
-    output_image = 'secure_revenue_report.png'
-    plt.savefig(output_image, dpi=300)
-    print(f"✅ Rapport généré avec succès : {output_image}")
-    
-    # Optionnel : Afficher le graphique à l'écran
-    # plt.show()
 
 if __name__ == "__main__":
-    generate_secure_report('clean_data_export.csv')
+    generate_secure_report()
